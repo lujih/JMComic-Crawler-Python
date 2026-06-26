@@ -9,7 +9,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from concurrent.futures import ThreadPoolExecutor
 
 from .jm_downloader import BaseDownloader
@@ -50,7 +49,7 @@ class JmAsyncDownloader(BaseDownloader):
         self._photo_semaphore = asyncio.Semaphore(photo_concurrency)
 
         # 解密线程池（CPU 密集操作卸载）
-        decode_worker = decode_worker if decode_worker is not None else min(4, os.cpu_count() or 1)
+        decode_worker = int(decode_worker if decode_worker is not None else option.download.threading.decode_worker)
         self._decode_pool = ThreadPoolExecutor(max_workers=decode_worker, thread_name_prefix='jm-async-decode')
 
     # ======================================================================

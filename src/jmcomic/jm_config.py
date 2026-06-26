@@ -481,6 +481,7 @@ class JmModuleConfig:
             'threading': {
                 'image': 30,
                 'photo': None,
+                'decode_worker': None,
             },
         },
         'client': {
@@ -540,11 +541,14 @@ class JmModuleConfig:
             # use system proxy by default
             meta_data['proxies'] = cls.DEFAULT_PROXIES
 
-        # threading photo
+        # threading photo & decode_worker
         dt = option_dict['download']['threading']
         if dt['photo'] is None:
             import os
             dt['photo'] = os.cpu_count()
+        if dt['decode_worker'] is None:
+            import os
+            dt['decode_worker'] = min(4, os.cpu_count() or 1)
 
         return option_dict
 
