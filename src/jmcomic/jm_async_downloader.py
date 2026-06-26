@@ -50,6 +50,7 @@ class JmAsyncDownloader(BaseDownloader):
         self._photo_semaphore = asyncio.Semaphore(photo_concurrency)
 
         # 解密线程池（CPU 密集操作卸载）
+        decode_worker = decode_worker if decode_worker is not None else min(4, os.cpu_count() or 1)
         self._decode_pool = ThreadPoolExecutor(max_workers=decode_worker, thread_name_prefix='jm-async-decode')
 
     # ======================================================================
@@ -142,8 +143,9 @@ class JmAsyncDownloader(BaseDownloader):
         对齐 sync JmDownloader.download_by_image_detail 的逻辑。
         """
         img_save_path = self.option.decide_image_filepath(image)
+        from common import file_exists
         image.save_path = img_save_path
-        image.exists = os.path.exists(img_save_path)
+        image.exists = file_exists(img_save_path)
         image.cache = self.option.decide_download_cache(image)
 
         await self.before_image(image, img_save_path)
