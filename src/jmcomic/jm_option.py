@@ -256,6 +256,14 @@ class JmOption:
             photo
         )
 
+        # 路径遍历防护：确保解析后的路径仍在 base_dir 范围内
+        resolved = os.path.realpath(save_dir)
+        base = os.path.realpath(self.dir_rule.base_dir)
+        if not resolved.startswith(base + os.sep) and resolved != base:
+            raise JmcomicException(
+                f'路径安全校验失败: {save_dir} 不在 base_dir ({base}) 范围内'
+            )
+
         if ensure_exists:
             save_dir = JmcomicText.try_mkdir(save_dir)
 

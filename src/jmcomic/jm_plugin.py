@@ -71,9 +71,21 @@ class JmOptionPlugin:
         if not self.delete_original_file:
             return
 
+        # 计算安全基目录：只删除 base_dir 范围内的文件
+        try:
+            base_dir = os.path.abspath(self.option.dir_rule.base_dir)
+        except Exception:
+            base_dir = None
+
         for p in paths:
             if file_not_exists(p):
                 continue
+
+            if base_dir is not None:
+                real = os.path.realpath(p)
+                if not real.startswith(base_dir + os.sep) and real != base_dir:
+                    self.log(f'路径不在下载目录内，跳过删除: {p}', 'remove.skip')
+                    continue
 
             if os.path.isdir(p):
                 if os.listdir(p):
@@ -88,10 +100,12 @@ class JmOptionPlugin:
     # noinspection PyMethodMayBeStatic
     def execute_cmd(self, cmd):
         """
-        执行shell命令，这里采用简单的实现
+        执行shell命令。
+        注意：调用方必须确保cmd中的参数经过 shlex.quote() 转义，防止命令注入。
         :param cmd: shell命令
         """
-        return os.system(cmd)
+        import subprocess
+        return subprocess.run(cmd, shell=True, check=False).returncode
 
     # noinspection PyMethodMayBeStatic
     def execute_multi_line_cmd(self, cmd: str):
@@ -745,15 +759,20 @@ class FavoriteFolderExportPlugin(JmOptionPlugin):
                 zipf.write(file, arcname=of_file_name(file))
 
     def zip_with_password(self):
-        # 构造shell命令
+        import shlex
+
+        # 对用户配置的路径和密码做 shell 转义，防止命令注入
+        save_dir = shlex.quote(self.save_dir)
+        zip_filepath = shlex.quote(self.zip_filepath)
+        zip_password = shlex.quote(self.zip_password) if self.zip_password else ''
+
         cmd_list = f'''
-        cd {self.save_dir}
-        7z a "{self.zip_filepath}" "./" -p{self.zip_password} -mhe=on > "../7z_output.txt"
+        cd {save_dir}
+        7z a {zip_filepath} "./" -p{zip_password} -mhe=on > "../7z_output.txt"
         
         '''
-        self.log(f'运行命令: {cmd_list}')
+        self.log(f'运行命令: 7z a {zip_filepath} "./" -p*** -mhe=on > "../7z_output.txt"')
 
-        # 执行
         self.execute_multi_line_cmd(cmd_list)
 
 
