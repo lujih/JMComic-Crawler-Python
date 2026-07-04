@@ -2,7 +2,7 @@ import asyncio
 
 from .jm_downloader import *
 
-__DOWNLOAD_API_RET = Tuple[JmAlbumDetail, JmDownloader]
+__DOWNLOAD_API_RET = DownloadResult
 
 
 def download_batch(download_api,
@@ -10,11 +10,13 @@ def download_batch(download_api,
                    option=None,
                    downloader=None,
                    **kwargs,
-                   ) -> Set[__DOWNLOAD_API_RET]:
+                   ) -> BatchResult:
     """
     批量下载 album / photo
 
-    一个album/photo，对应一个线程，对应一个option
+    一个album/photo，对应一个线程，对应一个option。
+    返回 BatchResult(set)，支持 for album, dler in result 遍历。
+    失败项收集在 result.failed 中，不会静默丢失。
 
     :param download_api: 下载api
     :param jm_id_iter: jmid (album_id, photo_id) 的迭代器
@@ -26,22 +28,23 @@ def download_batch(download_api,
     if option is None:
         option = JmModuleConfig.option_class().default()
 
-    result = set()
+    result = BatchResult()
 
-    def callback(*ret):
-        result.add(ret)
+    def _safe_download(aid):
+        """batch 内部的单任务包装：确保异常被收集而非静默丢失"""
+        try:
+            ret = download_api(aid, option, downloader, **kwargs)
+            result.add(ret)
+        except Exception as e:
+            jm_log('batch.failed', f'批量下载失败: [{aid}], 异常: [{e}]', e)
+            result.failed[str(aid)] = e
 
     multi_thread_launcher(
         iter_objs=set(
             JmcomicText.parse_to_jm_id(jmid)
             for jmid in jm_id_iter
         ),
-        apply_each_obj_func=lambda aid: download_api(aid,
-                                                     option,
-                                                     downloader,
-                                                     callback=callback,
-                                                     **kwargs,
-                                                     ),
+        apply_each_obj_func=_safe_download,
         wait_finish=True
     )
 
@@ -81,7 +84,7 @@ def download_album(jm_album_id,
             callback(album, dler)
         if check_exception:
             dler.raise_if_has_exception()
-        return album, dler
+        return DownloadResult(album, dler)
 
 
 def download_photo(jm_photo_id,
@@ -106,7 +109,7 @@ def download_photo(jm_photo_id,
             callback(photo, dler)
         if check_exception:
             dler.raise_if_has_exception()
-        return photo, dler
+        return DownloadResult(photo, dler)
 
 
 def new_downloader(option=None, downloader=None) -> JmDownloader:
@@ -183,7 +186,7 @@ async def download_album_async(jm_album_id,
         if check_exception:
             dler.raise_if_has_exception()
 
-        return album, dler
+        return DownloadResult(album, dler)
 
 
 async def download_photo_async(jm_photo_id,
@@ -213,7 +216,7 @@ async def download_photo_async(jm_photo_id,
         if check_exception:
             dler.raise_if_has_exception()
 
-        return photo, dler
+        return DownloadResult(photo, dler)
 
 
 async def download_batch_async(download_api,
@@ -221,10 +224,11 @@ async def download_batch_async(download_api,
                                option=None,
                                downloader=None,
                                **kwargs,
-                               ):
+                               ) -> BatchResult:
     """
     异步批量下载 album / photo。
     - 容错机制：单个 album/photo 失败不会中止整批，也不会丢失其它已完成结果。
+    - 返回 BatchResult(set)，失败项收集在 result.failed 中。
     """
     if option is None:
         option = JmModuleConfig.option_class().default()
@@ -236,12 +240,13 @@ async def download_batch_async(download_api,
         return_exceptions=True,
     )
 
-    # 失败不抛出，但要记录，便于排查
-    result_set = set()
+    # 失败不抛出，但要记录到 result.failed，便于调用者排查
+    result = BatchResult()
     for jmid, r in zip(jm_ids, results):
         if isinstance(r, BaseException):
             jm_log('async.batch.failed', f'批量下载失败: [{jmid}], 异常: [{r}]', r)
+            result.failed[str(jmid)] = r
         else:
-            result_set.add(r)
+            result.add(r)
 
-    return result_set
+    return result

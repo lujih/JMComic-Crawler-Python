@@ -57,7 +57,8 @@ class AsyncJmApiClient(AsyncJmcomicClient):
     def __init__(self, option: JmOption, max_clients=None, **kwargs):
         self.option = option
         self._domain_list = self._resolve_domain_list()
-        self._retry_times = option.client.get('retry_times', 5) or 5
+        retry_times = option.client.get('retry_times')
+        self._retry_times = retry_times if retry_times is not None else 5
         self._timeout = option.client.get('timeout', 30) or 30
         # AsyncSession 句柄池大小：优先用调用方（下载器）传入的实际图片并发，
         # 否则回退到 option 配置；避免因默认限制导致真实并发被隐式压低。

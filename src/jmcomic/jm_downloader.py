@@ -1,3 +1,5 @@
+from typing import NamedTuple
+
 from .jm_option import *
 
 
@@ -238,6 +240,38 @@ class BaseDownloader(DownloadCallback):
             {'downloader': self},
             PartialDownloadFailedException,
         )
+
+
+class DownloadResult(NamedTuple):
+    """单个下载结果。
+
+    支持解包：album, dler = download_album(id)
+    也支持属性访问：result.detail, result.downloader
+    NamedTuple 是 tuple 子类，isinstance(result, tuple) 为 True。
+    """
+    detail: DetailEntity
+    downloader: BaseDownloader
+
+
+class BatchResult(set):
+    """批量下载结果集。
+
+    继承 set，完全兼容旧写法 for album, dler in result。
+    新增 .failed 属性，记录失败的 jm_id 和对应异常。
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.failed: Dict[str, BaseException] = {}
+
+    @property
+    def all_succeeded(self) -> bool:
+        return len(self.failed) == 0
+
+    @property
+    def total(self) -> int:
+        """预期总数（成功 + 失败）"""
+        return len(self) + len(self.failed)
 
 
 class JmDownloader(BaseDownloader):
