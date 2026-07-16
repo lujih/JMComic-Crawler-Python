@@ -1,5 +1,9 @@
 # 异步使用指南
 
+> 关于`async`和`sync`版本的性能对比可以查看 → [actions-benchmark](https://github.com/hect0x7/JMComic-Crawler-Python/actions/workflows/benchmark.yml)
+>
+> 简单来说，下载场景`async`**快10%↑**，纯查询无下载场景`async`**快30%↑**
+
 本章节介绍项目中提供的异步接口。章节结构与 `0_common_usage.md` 基本对应，可作为从同步迁移到异步代码的对照参考。
 
 ---
@@ -14,7 +18,10 @@ import jmcomic
 
 async def main():
     # 异步下载单个本子
-    await jmcomic.download_album_async('438696')
+    album, downloader = await jmcomic.download_album_async('438696')
+
+    # 返回的 downloader 已释放网络连接和线程池，只用于读取下载结果
+    print(downloader.download_failed_image)
     
     # 异步下载单章节
     await jmcomic.download_photo_async('438696')
@@ -62,6 +69,16 @@ async with JmOption.default().new_jm_async_client() as cl:
 - **单独使用**：如果你不想使用 `async with`，而是直接调用 `cl = op.new_jm_async_client()`，那么在第一次发起真实的请求（比如 `get_album_detail`）时，客户端也会自动检测并先执行一遍初始化。
 
 无论哪种写法都只会初始化一次，你不需要自己去调用任何初始化代码，直接用就行。
+
+如果不使用 `async with`，使用完成后需要显式关闭客户端：
+
+```python
+cl = JmOption.default().new_jm_async_client()
+try:
+    album = await cl.get_album_detail(123)
+finally:
+    await cl.close()
+```
 
 ---
 
@@ -169,24 +186,32 @@ asyncio.run(main())
 
 ## 7. 异步分类 / 排行榜
 
-分类和排行榜本质上都是过滤请求，可以使用 `categories_filter` 异步方法获取分页。
+分类和排行榜本质上都是过滤请求，可以使用 `categories_filter` 获取单页，或使用
+`categories_filter_gen` 异步生成器自动翻页。
 
 ```python
 import asyncio
-from jmcomic import JmOption
+from jmcomic import JmMagicConstants, JmOption
 
 async def main():
     async with JmOption.default().new_jm_async_client() as cl:
         # 获取全部时间、全部分类下，按观看数排序的第一页本子
         page = await cl.categories_filter(
             page=1,
-            time='a',        # JmMagicConstants.TIME_ALL
-            category='all',  # JmMagicConstants.CATEGORY_ALL
-            order_by='mv',   # JmMagicConstants.ORDER_BY_VIEW
+            time=JmMagicConstants.TIME_ALL,
+            category=JmMagicConstants.CATEGORY_ALL,
+            order_by=JmMagicConstants.ORDER_BY_VIEW,
         )
         
         for aid, atitle in page:
             print(aid, atitle)
+
+        async for page in cl.categories_filter_gen(
+            time=JmMagicConstants.TIME_ALL,
+            category=JmMagicConstants.CATEGORY_ALL,
+            order_by=JmMagicConstants.ORDER_BY_VIEW,
+        ):
+            print(page.page)
 
 asyncio.run(main())
 ```
