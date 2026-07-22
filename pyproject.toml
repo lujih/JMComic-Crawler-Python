@@ -25,16 +25,19 @@ classifiers=[
 ]
 dependencies = [
     "commonx>=0.6.38",
-    "curl-cffi",
-    "pillow",
-    "pycryptodome",
-    "pyyaml",
+    "curl-cffi>=0.5.10",
+    "pillow>=10.0.0",
+    "pycryptodome>=3.19.0",
+    "pyyaml>=6.0",
 ]
 dynamic = ["version"]
 
 [project.urls]
 Homepage = "https://github.com/hect0x7/JMComic-Crawler-Python"
 Documentation = "https://jmcomic.readthedocs.io"
+
+[project.optional-dependencies]
+extra = ["zhconv", "pyzipper", "py7zr", "img2pdf", "psutil"]
 
 [project.scripts]
 jmcomic = "jmcomic.cli:main"

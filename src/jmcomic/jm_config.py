@@ -135,6 +135,7 @@ class JmModuleConfig:
 
     # 图片分隔相关
     SCRAMBLE_CACHE = {}
+    SCRAMBLE_CACHE_LOCK = None  # threading.Lock 延迟初始化
 
     # 当本子没有作者名字时，顶替作者名字
     DEFAULT_AUTHOR = 'default_author'
@@ -623,3 +624,10 @@ def enable_pretty_log():
     handler.setFormatter(PrettyFormatter())
     jm_logger.addHandler(handler)
     jm_logger.setLevel(logging.INFO)
+
+
+def format_album_url(aid, domain='18comic.vip'):
+    """
+    把album_id变为可访问的URL，方便print打印后用浏览器访问
+    """
+    return f'{JmModuleConfig.PROT}{domain}/album/{aid}/'

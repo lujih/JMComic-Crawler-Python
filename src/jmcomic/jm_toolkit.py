@@ -208,10 +208,8 @@ class JmcomicText:
 
     @classmethod
     def format_album_url(cls, aid, domain='18comic.vip'):
-        """
-        把album_id变为可访问的URL，方便print打印后用浏览器访问
-        """
-        return cls.format_url(f'/album/{aid}/', domain)
+        from .jm_config import format_album_url as _format_album_url
+        return _format_album_url(aid, domain)
 
     class DSLReplacer:
 
@@ -393,7 +391,7 @@ class JmcomicText:
     @classmethod
     def limit_text(cls, text: str, limit: int) -> str:
         length = len(text)
-        return text if length <= limit else (text[:limit] + f'...({length - limit}')
+        return text if length <= limit else (text[:limit] + f'...({length - limit})')
 
     @classmethod
     def get_album_cover_url(cls,

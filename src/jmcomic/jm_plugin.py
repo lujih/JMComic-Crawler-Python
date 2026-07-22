@@ -99,18 +99,21 @@ class JmOptionPlugin:
 
     # noinspection PyMethodMayBeStatic
     def execute_cmd(self, cmd):
-        """
-        执行shell命令。
-        注意：调用方必须确保cmd中的参数经过 shlex.quote() 转义，防止命令注入。
-        :param cmd: shell命令
-        """
         import subprocess
+
+        if isinstance(cmd, (list, tuple)):
+            return subprocess.run(cmd, shell=False, check=False).returncode
+
         return subprocess.run(cmd, shell=True, check=False).returncode
 
     # noinspection PyMethodMayBeStatic
-    def execute_multi_line_cmd(self, cmd: str):
+    def execute_multi_line_cmd(self, cmd):
         import subprocess
-        subprocess.run(cmd, shell=True, check=True)
+
+        if isinstance(cmd, (list, tuple)):
+            subprocess.run(cmd, shell=False, check=True)
+        else:
+            subprocess.run(cmd, shell=True, check=True)
 
     def enter_wait_list(self):
         self.option.need_wait_plugins.append(self)
@@ -759,21 +762,20 @@ class FavoriteFolderExportPlugin(JmOptionPlugin):
                 zipf.write(file, arcname=of_file_name(file))
 
     def zip_with_password(self):
-        import shlex
+        import subprocess
 
-        # 对用户配置的路径和密码做 shell 转义，防止命令注入
-        save_dir = shlex.quote(self.save_dir)
-        zip_filepath = shlex.quote(self.zip_filepath)
-        zip_password = shlex.quote(self.zip_password) if self.zip_password else ''
+        save_dir = self.save_dir
+        zip_filepath = self.zip_filepath
+        zip_password = self.zip_password
 
-        cmd_list = f'''
-        cd {save_dir}
-        7z a {zip_filepath} "./" -p{zip_password} -mhe=on > "../7z_output.txt"
-        
-        '''
-        self.log(f'运行命令: 7z a {zip_filepath} "./" -p*** -mhe=on > "../7z_output.txt"')
+        cmd = ['7z', 'a', zip_filepath, './', '-mhe=on']
+        if zip_password:
+            cmd.append(f'-p{zip_password}')
 
-        self.execute_multi_line_cmd(cmd_list)
+        self.log(f'运行命令: 7z a {zip_filepath} "./" -p*** -mhe=on')
+
+        with open(os.path.join(os.path.dirname(zip_filepath), '7z_output.txt'), 'w') as f:
+            subprocess.run(cmd, cwd=save_dir, check=True, stdout=f, stderr=subprocess.STDOUT)
 
 
 class Img2pdfPlugin(JmOptionPlugin):

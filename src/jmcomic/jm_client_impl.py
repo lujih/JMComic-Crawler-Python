@@ -437,13 +437,7 @@ class JmHtmlClient(AbstractJmClient):
 
         return JmPageTool.parse_html_to_favorite_page(resp.text)
 
-    # noinspection PyTypeChecker
-    def get_username_from_cookies(self) -> str:
-        # cookies = self.get_meta_data('cookies', None)
-        # if not cookies:
-        #     ExceptionTool.raises('未登录，无法获取到对应的用户名，请给favorite方法传入username参数')
-        # 解析cookies，可能需要用到 phpserialize，比较麻烦，暂不实现
-        pass
+
 
     def get_jm_html(self, url, require_200=True, **kwargs):
         """
@@ -698,12 +692,23 @@ class JmApiClient(AbstractJmClient):
         if album_id is not None and album_id in cache:
             return cache[album_id]
 
-        scramble_id = self.fetch_scramble_id(photo_id)
-        cache[photo_id] = scramble_id
-        if album_id is not None:
-            cache[album_id] = scramble_id
+        if JmModuleConfig.SCRAMBLE_CACHE_LOCK is None:
+            from threading import Lock
+            JmModuleConfig.SCRAMBLE_CACHE_LOCK = Lock()
 
-        return scramble_id
+        with JmModuleConfig.SCRAMBLE_CACHE_LOCK:
+            # double-check after acquiring lock
+            if photo_id in cache:
+                return cache[photo_id]
+            if album_id is not None and album_id in cache:
+                return cache[album_id]
+
+            scramble_id = self.fetch_scramble_id(photo_id)
+            cache[photo_id] = scramble_id
+            if album_id is not None:
+                cache[album_id] = scramble_id
+
+            return scramble_id
 
     def fetch_detail_entity(self, jmid, clazz: Type[DetailType]) -> DetailType:
         """
@@ -963,16 +968,16 @@ class JmApiClient(AbstractJmClient):
             msg = JmModuleConfig.JM_ERROR_STATUS_CODE.get(code, f'HTTP状态码: {code}')
             ExceptionTool.raises_resp(f"禁漫API异常响应, {msg}", resp)
 
-        url = resp.request.url
+        url = getattr(resp, 'url', '') or getattr(getattr(resp, 'request', None), 'url', '')
 
         if self.API_SCRAMBLE in url:
             # /chapter_view_template 这个接口不是返回json数据，不做检查
             return resp
 
         text = resp.text
-        for char in text:
+        # 只检查前1024个字符，避免遍历大型HTML页面
+        for char in text[:1024]:
             if char not in (' ', '\n', '\t'):
-                # 找到第一个有效字符
                 ExceptionTool.require_true(
                     char == '{',
                     f'请求不是json格式，强制重试！响应文本: [{JmcomicText.limit_text(text, 200)}]'
@@ -1099,10 +1104,12 @@ class PhotoConcurrentFetcherProxy(JmcomicClient):
 
         def result(self):
             if not self.done:
-                result = self.future.result()
-                self._result = result
-                self.done = True
-                self.future = None  # help gc
+                try:
+                    result = self.future.result()
+                    self._result = result
+                finally:
+                    self.done = True
+                    self.future = None  # help gc
                 self.after_done_callback()
 
             return self._result

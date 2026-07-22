@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import NoReturn
 
 from .jm_entity import *
+from .jm_config import format_album_url
 
 
 class JmcomicException(Exception):
@@ -156,8 +157,7 @@ class ExceptionTool:
         :param resp: 响应对象
         :param jmid: 禁漫本子/章节id
         """
-        from .jm_toolkit import JmcomicText
-        url = JmcomicText.format_album_url(jmid)
+        url = format_album_url(jmid)
 
         req_type = "本子" if "album" in url else "章节"
         cls.raises(

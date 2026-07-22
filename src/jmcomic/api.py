@@ -78,31 +78,22 @@ def download_album(jm_album_id,
                    ) -> Union[__DOWNLOAD_API_RET, Set[__DOWNLOAD_API_RET]]:
     """
     下载一个本子（album），包含其所有的章节（photo）
-
-    当jm_album_id不是str或int时，视为批量下载，相当于调用 download_batch(download_album, jm_album_id, option, downloader)
-
+    当jm_album_id不是str或int时，视为批量下载
     :param jm_album_id: 本子的禁漫车号
     :param option: 下载选项
     :param downloader: 下载器类
     :param callback: 返回值回调函数，可以拿到 album 和 downloader
-    :param check_exception: 是否检查异常, 如果为True，会检查downloader是否有下载异常，并上抛PartialDownloadFailedException
-    :param extra: 下载特性（Feature），下载时动态挂载的附加行为上下文。会自动根据上下文（如 album/photo 来源）自适应参数行为。支持单个 Feature、FeatureChain、或列表
-    :return: 对于的本子实体类，下载器（如果是上述的批量情况，返回值为download_batch的返回值）
+    :param check_exception: 是否检查异常
+    :param extra: 下载特性（Feature）
+    :return: DownloadResult (如果是批量情况返回 BatchResult)
     """
-
     if not isinstance(jm_album_id, (str, int)):
         return download_batch(download_album, jm_album_id, option, downloader, extra=extra)
 
-    with new_downloader(option, downloader) as dler:
-        # 注册 Feature 及来源，由 downloader 在 after_album 钩子中自动执行
-        dler.add_features(extra, 'download_album')
-        album = dler.download_album(jm_album_id)
-
-        if callback is not None:
-            callback(album, dler)
-        if check_exception:
-            dler.raise_if_has_exception()
-        return DownloadResult(album, dler)
+    return _download_and_return(
+        jm_album_id, option, downloader, callback, check_exception, extra,
+        'download_album', lambda d: d.download_album(jm_album_id),
+    )
 
 
 def download_photo(jm_photo_id,
@@ -113,21 +104,35 @@ def download_photo(jm_photo_id,
                    extra=None,
                    ):
     """
-    下载一个章节（photo），参数同 download_album
+    下载一个章节（photo）
+    当jm_photo_id不是str或int时，视为批量下载
+    :param jm_photo_id: 章节的禁漫车号
+    :param option: 下载选项
+    :param downloader: 下载器类
+    :param callback: 返回值回调函数
+    :param check_exception: 是否检查异常
+    :param extra: 下载特性（Feature）
     """
     if not isinstance(jm_photo_id, (str, int)):
         return download_batch(download_photo, jm_photo_id, option, downloader, extra=extra)
 
+    return _download_and_return(
+        jm_photo_id, option, downloader, callback, check_exception, extra,
+        'download_photo', lambda d: d.download_photo(jm_photo_id),
+    )
+
+
+def _download_and_return(jm_id, option, downloader, callback, check_exception, extra,
+                         feature_source, download_fn):
     with new_downloader(option, downloader) as dler:
-        # 注册 Feature 及来源，由 downloader 在 after_photo 钩子中自动执行
-        dler.add_features(extra, 'download_photo')
-        photo = dler.download_photo(jm_photo_id)
+        dler.add_features(extra, feature_source)
+        entity = download_fn(dler)
 
         if callback is not None:
-            callback(photo, dler)
+            callback(entity, dler)
         if check_exception:
             dler.raise_if_has_exception()
-        return DownloadResult(photo, dler)
+        return DownloadResult(entity, dler)
 
 
 def new_downloader(option=None, downloader=None) -> JmDownloader:
@@ -182,11 +187,9 @@ async def download_album_async(jm_album_id,
                                extra=None,
                                ):
     """
-    异步下载一个本子（album），包含其所有的章节（photo）。
-
-    - 支持批量下载（当 jm_album_id 为可迭代对象时）
-    - callback 支持同步函数和异步函数
-    - 返回 (album, downloader) 元组，其中 downloader 的网络和线程池资源已关闭，仅用于读取下载结果
+    异步下载一个本子（album），包含其所有的章节（photo）
+    callback 支持同步函数和异步函数
+    返回的 downloader 已关闭网络和线程池资源，仅用于读取下载结果
     """
     if not isinstance(jm_album_id, (str, int)):
         return await download_batch_async(download_album_async,
@@ -196,15 +199,10 @@ async def download_album_async(jm_album_id,
                                           extra=extra
                                           )
 
-    async with new_async_downloader(option, downloader) as dler:
-        dler.add_features(extra, 'download_album')
-        album = await dler.download_album(jm_album_id)
-
-        await _invoke_async_callback(callback, album, dler)
-        if check_exception:
-            dler.raise_if_has_exception()
-
-        return DownloadResult(album, dler)
+    return await _download_async_and_return(
+        jm_album_id, option, downloader, callback, check_exception, extra,
+        'download_album', lambda d: d.download_album(jm_album_id),
+    )
 
 
 async def download_photo_async(jm_photo_id,
@@ -215,9 +213,9 @@ async def download_photo_async(jm_photo_id,
                                extra=None,
                                ):
     """
-    异步下载一个章节（photo）。
-    callback 支持同步函数和异步函数。
-    返回的 downloader 已关闭网络和线程池资源，仅用于读取下载结果。
+    异步下载一个章节（photo）
+    callback 支持同步函数和异步函数
+    返回的 downloader 已关闭网络和线程池资源，仅用于读取下载结果
     """
     if not isinstance(jm_photo_id, (str, int)):
         return await download_batch_async(download_photo_async,
@@ -227,15 +225,23 @@ async def download_photo_async(jm_photo_id,
                                           extra=extra
                                           )
 
-    async with new_async_downloader(option, downloader) as dler:
-        dler.add_features(extra, 'download_photo')
-        photo = await dler.download_photo(jm_photo_id)
+    return await _download_async_and_return(
+        jm_photo_id, option, downloader, callback, check_exception, extra,
+        'download_photo', lambda d: d.download_photo(jm_photo_id),
+    )
 
-        await _invoke_async_callback(callback, photo, dler)
+
+async def _download_async_and_return(jm_id, option, downloader, callback, check_exception, extra,
+                                     feature_source, download_fn):
+    async with new_async_downloader(option, downloader) as dler:
+        dler.add_features(extra, feature_source)
+        entity = await download_fn(dler)
+
+        await _invoke_async_callback(callback, entity, dler)
         if check_exception:
             dler.raise_if_has_exception()
 
-        return DownloadResult(photo, dler)
+        return DownloadResult(entity, dler)
 
 
 async def download_batch_async(download_api,

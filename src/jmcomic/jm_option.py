@@ -314,8 +314,7 @@ class JmOption:
 
         # version
         version = dic.pop('version', None)
-        # noinspection PyTypeChecker
-        if version is not None and float(version) >= float(JmModuleConfig.JM_OPTION_VER):
+        if version is not None and tuple(int(x) for x in version.split('.')) >= tuple(int(x) for x in JmModuleConfig.JM_OPTION_VER.split('.')):
             # 版本号更高，跳过兼容代码
             return cls(**dic)
 
@@ -658,11 +657,13 @@ class JmOption:
 
             try:
                 self.invoke_plugin(pclass, kwargs, extra, pinfo)
-            except BaseException as e:
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
                 if safe is True or pinfo.get('safe', True):
                     jm_log('plugin.exception', e)
                 else:
-                    raise e
+                    raise
 
     def invoke_plugin(self, pclass, kwargs: Optional[Dict], extra: dict, pinfo: dict):
         # 检查插件的参数类型

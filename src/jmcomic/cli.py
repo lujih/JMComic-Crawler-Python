@@ -102,6 +102,10 @@ class JmcomicUI:
         from .api import download_album, download_photo
         from common import MultiTaskLauncher
 
+        if len(self.album_id_list) == 0 and len(self.photo_id_list) == 0:
+            print('未指定任何 id，请提供 album 或 photo 的 id，例如: jmcomic 123')
+            return
+
         if len(self.album_id_list) == 0:
             download_photo(self.photo_id_list, option)
         elif len(self.photo_id_list) == 0:
